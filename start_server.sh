@@ -1,48 +1,31 @@
 #!/bin/bash
 
-# Configuración
-REPO_URL="https://github.com/fdk06/PlantillaDesplegada.git"  # Cambia esto con tu URL de GitHub
-PROJECT_DIR="mi_proyecto"  # Nombre de la carpeta donde se clonará el repo
-PORT=3000
-
-# Instalar git, node y curl si no están en Termux
-pkg install -y git nodejs curl
-
-# Clonar el repositorio si no existe
-if [ ! -d "$PROJECT_DIR" ]; then
-    echo "Clonando el repositorio..."
-    git clone "$REPO_URL" "$PROJECT_DIR"
-else
-    echo "El repositorio ya está clonado."
-fi
-
-# Moverse al directorio del proyecto
-cd "$PROJECT_DIR" || exit
-
-# Instalar dependencias
-echo "Instalando dependencias..."
-npm install
-
-# Detener procesos en el puerto especificado
-fuser -k $PORT/tcp 2>/dev/null
-
-# Iniciar el servidor de Node.js en segundo plano
+# 1. Inicia el servidor Node.js en segundo plano
+echo "Iniciando servidor Node.js..."
 nohup node server.js > server.log 2>&1 &
+echo "Servidor Node.js iniciado."
 
-# Esperar unos segundos para asegurarse de que el servidor arrancó
+# Espera unos segundos para que el servidor arranque
 sleep 3
 
-# Iniciar ngrok y obtener el enlace público
-nohup ./ngrok http $PORT > ngrok.log 2>&1 &
+# 2. Inicia LocalTunnel para exponer el puerto 3000
+echo "Iniciando LocalTunnel en el puerto 3000..."
+nohup lt --port 3000 > lt.log 2>&1 &
+  
+# Espera para que LocalTunnel se inicie y genere la URL pública
+sleep 5
 
-# Esperar a que ngrok genere el enlace
-sleep 3
+# 3. Extrae la URL pública desde el log de LocalTunnel
+# La expresión regular busca algo del tipo "https://algo.loca.lt"
+TUNNEL_URL=$(grep -o "https://[a-z0-9-]*\.loca\.lt" lt.log | head -n 1)
 
-# Extraer la URL pública de ngrok y mostrarla
-NGROK_URL=$(curl -s http://127.0.0.1:4040/api/tunnels | grep -o 'https://[0-9a-z.-]*.ngrok-free.app')
-
-if [ -z "$NGROK_URL" ]; then
-    echo "Error: No se pudo obtener la URL de ngrok."
+if [ -z "$TUNNEL_URL" ]; then
+  echo "❌ No se pudo obtener la URL pública de LocalTunnel."
 else
-    echo "Tu servidor está disponible en: $NGROK_URL"
+  echo "✅ La URL pública de LocalTunnel es: $TUNNEL_URL"
 fi
+
+# 4. Obtén el tunnel password (la IP pública)
+echo "Obteniendo el tunnel password..."
+TUNNEL_PASSWORD=$(curl -s https://loca.lt/mytunnelpassword)
+echo "🔑 El tunnel password es: $TUNNEL_PASSWORD"
